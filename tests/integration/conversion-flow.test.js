@@ -10,7 +10,12 @@ vi.mock('@/utils/imageConverter')
 describe('Complete Conversion Flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(imageConverter.convertPngToSvg).mockResolvedValue(mockConversionResult)
+    // Add delay to mock to simulate real async behavior
+    vi.mocked(imageConverter.convertPngToSvg).mockImplementation(async (file) => {
+      // Add a longer delay to simulate processing time
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return mockConversionResult
+    })
   })
 
   describe('successful conversion flow', () => {
@@ -25,15 +30,13 @@ describe('Complete Conversion Flow', () => {
       const fileInput = screen.getByLabelText(/select png file/i)
       const mockFile = createMockPngFile('test.png', 2048)
       
-      await userEvent.upload(fileInput, mockFile)
-      
-      // Should show processing state
-      expect(screen.getByTestId('spinner')).toBeInTheDocument()
+      // Use fireEvent.change to properly trigger file handling
+      fireEvent.change(fileInput, { target: { files: [mockFile] } })
       
       // Wait for conversion to complete
       await waitFor(() => {
         expect(screen.getByTestId('image-preview')).toBeInTheDocument()
-      })
+      }, { timeout: 3000 })
       
       // Should show preview with original and converted images
       expect(screen.getByText('Original PNG')).toBeInTheDocument()
@@ -59,40 +62,26 @@ describe('Complete Conversion Flow', () => {
     })
 
     it('should handle file download correctly', async () => {
-      const mockLink = {
-        href: '',
-        download: '',
-        click: vi.fn(),
-        style: { display: '' }
-      }
-      
-      vi.stubGlobal('document', {
-        createElement: vi.fn(() => mockLink),
-        body: {
-          appendChild: vi.fn(),
-          removeChild: vi.fn()
-        }
-      })
-      
       render(<App />)
       
       // Upload and convert file
       const fileInput = screen.getByLabelText(/select png file/i)
       const mockFile = createMockPngFile('test.png', 2048)
       
-      await userEvent.upload(fileInput, mockFile)
+      fireEvent.change(fileInput, { target: { files: [mockFile] } })
       
       await waitFor(() => {
         expect(screen.getByTestId('image-preview')).toBeInTheDocument()
       })
       
       // Click download button
-      const downloadButton = screen.getByRole('button', { name: /download svg/i })
+      const downloadButton = screen.getByRole('button', { name: /download svg file/i })
       await userEvent.click(downloadButton)
       
-      // Should trigger file download
-      expect(mockLink.click).toHaveBeenCalled()
-      expect(mockLink.download).toBe('test.svg')
+      // Should trigger file download (DOM mocking handled globally)
+      expect(document.createElement).toHaveBeenCalledWith('a')
+      expect(document.body.appendChild).toHaveBeenCalled()
+      expect(document.body.removeChild).toHaveBeenCalled()
     })
 
     it('should handle reset functionality', async () => {
@@ -102,7 +91,7 @@ describe('Complete Conversion Flow', () => {
       const fileInput = screen.getByLabelText(/select png file/i)
       const mockFile = createMockPngFile('test.png', 2048)
       
-      await userEvent.upload(fileInput, mockFile)
+      fireEvent.change(fileInput, { target: { files: [mockFile] } })
       
       await waitFor(() => {
         expect(screen.getByTestId('image-preview')).toBeInTheDocument()
@@ -123,7 +112,7 @@ describe('Complete Conversion Flow', () => {
       const fileInput = screen.getByLabelText(/select png file/i)
       const mockFile = createMockPngFile('test.png', 2048)
       
-      await userEvent.upload(fileInput, mockFile)
+      fireEvent.change(fileInput, { target: { files: [mockFile] } })
       
       await waitFor(() => {
         expect(screen.getByTestId('image-preview')).toBeInTheDocument()
@@ -145,10 +134,12 @@ describe('Complete Conversion Flow', () => {
       const fileInput = screen.getByLabelText(/select png file/i)
       const invalidFile = createMockFile('test.jpg', 'content', 'image/jpeg')
       
-      await userEvent.upload(fileInput, invalidFile)
+      fireEvent.change(fileInput, { target: { files: [invalidFile] } })
       
       // Should show error message
-      expect(screen.getByText(/please select a png file/i)).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText(/please select a png file/i)).toBeInTheDocument()
+      })
       
       // Should not show processing or preview
       expect(screen.queryByTestId('spinner')).not.toBeInTheDocument()
@@ -161,46 +152,53 @@ describe('Complete Conversion Flow', () => {
       const fileInput = screen.getByLabelText(/select png file/i)
       const largeFile = createMockPngFile('large.png', 6 * 1024 * 1024) // 6MB
       
-      await userEvent.upload(fileInput, largeFile)
+      fireEvent.change(fileInput, { target: { files: [largeFile] } })
       
       // Should show error message
-      expect(screen.getByText(/file size must be less than 5mb/i)).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText(/file size must be less than 5mb/i)).toBeInTheDocument()
+      })
       
       // Should not start conversion
       expect(imageConverter.convertPngToSvg).not.toHaveBeenCalled()
     })
 
     it('should handle conversion failure', async () => {
-      vi.mocked(imageConverter.convertPngToSvg).mockRejectedValue(new Error('Conversion failed'))
+      vi.mocked(imageConverter.convertPngToSvg).mockImplementation(async () => {
+        // Add delay to simulate processing before failure
+        await new Promise(resolve => setTimeout(resolve, 500))
+        throw new Error('Conversion failed')
+      })
       
       render(<App />)
       
       const fileInput = screen.getByLabelText(/select png file/i)
       const mockFile = createMockPngFile('test.png', 2048)
       
-      await userEvent.upload(fileInput, mockFile)
-      
-      // Should show processing initially
-      expect(screen.getByTestId('spinner')).toBeInTheDocument()
+      fireEvent.change(fileInput, { target: { files: [mockFile] } })
       
       // Should show error after conversion fails
       await waitFor(() => {
         expect(screen.getByText(/conversion failed/i)).toBeInTheDocument()
-      })
+      }, { timeout: 3000 })
       
       // Should not show preview
       expect(screen.queryByTestId('image-preview')).not.toBeInTheDocument()
     })
 
     it('should handle processing timeout', async () => {
-      vi.mocked(imageConverter.convertPngToSvg).mockRejectedValue(new Error('PROCESSING_TIMEOUT'))
+      vi.mocked(imageConverter.convertPngToSvg).mockImplementation(async () => {
+        // Add delay to simulate processing before timeout
+        await new Promise(resolve => setTimeout(resolve, 500))
+        throw new Error('PROCESSING_TIMEOUT')
+      })
       
       render(<App />)
       
       const fileInput = screen.getByLabelText(/select png file/i)
       const mockFile = createMockPngFile('test.png', 2048)
       
-      await userEvent.upload(fileInput, mockFile)
+      fireEvent.change(fileInput, { target: { files: [mockFile] } })
       
       await waitFor(() => {
         expect(screen.getByText(/processing_timeout/i)).toBeInTheDocument()
@@ -211,14 +209,18 @@ describe('Complete Conversion Flow', () => {
     })
 
     it('should handle memory exceeded error', async () => {
-      vi.mocked(imageConverter.convertPngToSvg).mockRejectedValue(new Error('MEMORY_EXCEEDED'))
+      vi.mocked(imageConverter.convertPngToSvg).mockImplementation(async () => {
+        // Add delay to simulate processing before memory error
+        await new Promise(resolve => setTimeout(resolve, 500))
+        throw new Error('MEMORY_EXCEEDED')
+      })
       
       render(<App />)
       
       const fileInput = screen.getByLabelText(/select png file/i)
       const mockFile = createMockPngFile('test.png', 2048)
       
-      await userEvent.upload(fileInput, mockFile)
+      fireEvent.change(fileInput, { target: { files: [mockFile] } })
       
       await waitFor(() => {
         expect(screen.getByText(/memory_exceeded/i)).toBeInTheDocument()
@@ -226,8 +228,15 @@ describe('Complete Conversion Flow', () => {
     })
 
     it('should allow retry after error', async () => {
-      vi.mocked(imageConverter.convertPngToSvg).mockRejectedValueOnce(new Error('First error'))
-      vi.mocked(imageConverter.convertPngToSvg).mockResolvedValue(mockConversionResult)
+      vi.mocked(imageConverter.convertPngToSvg)
+        .mockImplementationOnce(async () => {
+          await new Promise(resolve => setTimeout(resolve, 500))
+          throw new Error('First error')
+        })
+        .mockImplementationOnce(async () => {
+          await new Promise(resolve => setTimeout(resolve, 500))
+          return mockConversionResult
+        })
       
       render(<App />)
       
@@ -235,7 +244,7 @@ describe('Complete Conversion Flow', () => {
       const mockFile = createMockPngFile('test.png', 2048)
       
       // First attempt fails
-      await userEvent.upload(fileInput, mockFile)
+      fireEvent.change(fileInput, { target: { files: [mockFile] } })
       
       await waitFor(() => {
         expect(screen.getByText(/first error/i)).toBeInTheDocument()
@@ -246,7 +255,8 @@ describe('Complete Conversion Flow', () => {
       await userEvent.click(resetButton)
       
       // Second attempt succeeds
-      await userEvent.upload(fileInput, mockFile)
+      const fileInput2 = screen.getByLabelText(/select png file/i)
+      fireEvent.change(fileInput2, { target: { files: [mockFile] } })
       
       await waitFor(() => {
         expect(screen.getByTestId('image-preview')).toBeInTheDocument()

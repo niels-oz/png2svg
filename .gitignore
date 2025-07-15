@@ -15,7 +15,7 @@ target
 dist
 data
 logs
-public
+# public
 .cache
 
 /build

@@ -1,6 +1,6 @@
 // Image conversion utility using ImageTracerJS
 
-import ImageTracer from 'imagetracerjs';
+// Dynamic import of ImageTracerJS will be used inside convertPngToSvg
 import { optimizeSvgPaths } from './svgOptimizer';
 
 // Optimal configuration for minimal output
@@ -24,113 +24,104 @@ const OPTIMAL_CONFIG = {
 
 export async function convertPngToSvg(file) {
   const startTime = performance.now();
-  
-  return new Promise((resolve, reject) => {
-    try {
-      // Validate file
-      if (!file || file.type !== 'image/png') {
-        reject(new Error('Invalid PNG file'));
+
+  // Validate file
+  if (!file || file.type !== 'image/png') {
+    throw new Error('Invalid PNG file');
+  }
+
+  // Load image as HTMLImageElement
+  const img = await loadImageFromFile(file);
+
+  // Optimize image size for processing
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Cannot get canvas context');
+
+  const maxDimension = 1000;
+  const scale = Math.min(maxDimension / img.width, maxDimension / img.height, 1);
+  canvas.width = img.width * scale;
+  canvas.height = img.height * scale;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  // Dynamically load ImageTracerJS UMD build
+  async function ensureImageTracerLoaded() {
+    if (typeof window === 'undefined') throw new Error('ImageTracerJS can only run in the browser.');
+    if (window.ImageTracer && typeof window.ImageTracer.imageToSVG === 'function') return;
+    // Not loaded: dynamically inject script
+    await new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[src="/imagetracer_v1.2.6.js"]');
+      if (existing) {
+        existing.addEventListener('load', resolve);
+        existing.addEventListener('error', () => reject(new Error('Failed to load ImageTracerJS UMD script.')));
         return;
       }
-      
-      console.log('Starting PNG to SVG conversion for:', file.name);
-      
+      const script = document.createElement('script');
+      script.src = '/imagetracer_v1.2.6.js';
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Failed to load ImageTracerJS UMD script.'));
+      document.body.appendChild(script);
+    });
+    if (!window.ImageTracer || typeof window.ImageTracer.imageToSVG !== 'function') {
+      throw new Error('ImageTracerJS UMD did not load properly.');
+    }
+  }
+
+  await ensureImageTracerLoaded();
+
+  console.log('Canvas size before tracing:', canvas.width, canvas.height);
+  let svgString;
+  try {
+    // Draw image on canvas and get pixel data
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    svgString = window.ImageTracer.imagedataToSVG(imageData, OPTIMAL_CONFIG);
+    console.log('Result of window.ImageTracer.imagedataToSVG:', svgString);
+  } catch (e) {
+    console.warn('window.ImageTracer.imageToSVGString failed:', e);
+  }
+  if (!svgString || typeof svgString !== 'string') {
+    throw new Error('ImageTracerJS failed to generate SVG (UMD build, imageData input).');
+  }
+  const optimized = optimizeSvgPaths(svgString);
+
+  // Clean up
+  URL.revokeObjectURL(img.src);
+
+  const endTime = performance.now();
+  return {
+    svgString: optimized,
+    originalSize: file.size,
+    svgSize: new Blob([optimized]).size,
+    pointCount: countSvgPoints(optimized),
+    processingTime: Math.round(endTime - startTime)
+  };
+}
+
+// Helper to load an image from a File and return HTMLImageElement
+async function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
       const img = new Image();
-      
-      // Set up timeout for image loading
+      img.src = reader.result;
       const timeout = setTimeout(() => {
-        console.error('Image loading timeout');
         reject(new Error('Image loading timeout'));
-      }, 30000); // 30 second timeout
-      
+      }, 30000);
       img.onload = () => {
         clearTimeout(timeout);
-        console.log('Image loaded successfully:', img.width, 'x', img.height);
-        
-        try {
-          // Optimize image size for processing
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          
-          if (!ctx) {
-            throw new Error('Cannot get canvas context');
-          }
-          
-          // Optimize canvas size for better performance
-          const maxDimension = 1000;
-          const scale = Math.min(maxDimension / img.width, maxDimension / img.height, 1);
-          
-          canvas.width = img.width * scale;
-          canvas.height = img.height * scale;
-          
-          console.log('Canvas created:', canvas.width, 'x', canvas.height);
-          
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          console.log('Image drawn to canvas');
-          
-          // Convert with ImageTracerJS
-          console.log('Starting ImageTracerJS conversion...');
-          console.log('ImageTracer object:', ImageTracer);
-          console.log('ImageTracer.imageToSVG:', typeof ImageTracer.imageToSVG);
-          
-          if (!ImageTracer || !ImageTracer.imageToSVG) {
-            throw new Error('ImageTracerJS not available or not properly loaded');
-          }
-          
-          const svgString = ImageTracer.imageToSVG(canvas, OPTIMAL_CONFIG);
-          console.log('ImageTracerJS conversion completed, SVG length:', svgString ? svgString.length : 'null');
-          
-          if (!svgString) {
-            throw new Error('ImageTracerJS failed to generate SVG');
-          }
-          
-          // Post-process optimization
-          const optimized = optimizeSvgPaths(svgString);
-          console.log('SVG optimization completed');
-          
-          // Clean up
-          URL.revokeObjectURL(img.src);
-          
-          const endTime = performance.now();
-          
-          const result = {
-            svgString: optimized,
-            originalSize: file.size,
-            svgSize: new Blob([optimized]).size,
-            pointCount: countSvgPoints(optimized),
-            processingTime: Math.round(endTime - startTime)
-          };
-          
-          console.log('Conversion completed successfully:', result);
-          resolve(result);
-        } catch (error) {
-          console.error('Conversion error:', error);
-          reject(new Error('Conversion failed: ' + error.message));
-        }
+        resolve(img);
       };
-      
-      img.onerror = (error) => {
+      img.onerror = () => {
         clearTimeout(timeout);
-        console.error('Image load error:', error);
-        reject(new Error('Failed to load image'));
+        reject(new Error('Image failed to load'));
       };
-      
-      // Create object URL and load image
-      const objectUrl = URL.createObjectURL(file);
-      console.log('Created object URL:', objectUrl);
-      img.src = objectUrl;
-      
-      // In test environment, trigger onload manually
-      if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
-        setTimeout(() => {
-          console.log('Test environment: triggering onload manually');
-          img.onload();
-        }, 0);
-      }
-    } catch (error) {
-      console.error('Setup error:', error);
-      reject(new Error('Conversion failed: ' + error.message));
-    }
+    };
+    reader.onerror = () => {
+      reject(new Error('Failed to read file as data URL'));
+    };
+    reader.readAsDataURL(file);
   });
 }
 

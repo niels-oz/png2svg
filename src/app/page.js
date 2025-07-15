@@ -18,6 +18,7 @@ export default function Home() {
   } = useImageConverter()
 
   const handleFileUpload = (uploadedFile) => {
+    console.log('handleFileUpload called with:', uploadedFile?.name);
     convertFile(uploadedFile)
   }
 
@@ -35,12 +36,15 @@ export default function Home() {
       ) : (
         <div>
           {isProcessing && (
-            <div data-testid="spinner" className="spinner"></div>
+            <div data-testid="spinner" className="spinner">
+              <p>Processing PNG to SVG conversion...</p>
+              <p>Check browser console for detailed logs</p>
+            </div>
           )}
           
           {error && (
-            <div className="error-message">
-              {error}
+            <div className="error-message" style={{color: 'red', padding: '10px', border: '1px solid red', margin: '10px 0'}}>
+              <strong>Error:</strong> {error}
             </div>
           )}
           

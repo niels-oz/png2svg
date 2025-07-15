@@ -14,6 +14,8 @@ export default function useImageConverter() {
   });
 
   const convertFile = useCallback(async (file) => {
+    console.log('convertFile called with:', file?.name, file?.type, file?.size);
+    
     setState(prev => ({ 
       ...prev, 
       isProcessing: true, 
@@ -23,8 +25,10 @@ export default function useImageConverter() {
     
     try {
       // Validate file first
+      console.log('Validating file...');
       const validation = validatePngFile(file);
       if (!validation.isValid) {
+        console.log('File validation failed:', validation.errors);
         setState(prev => ({ 
           ...prev, 
           error: validation.errors[0], 
@@ -34,10 +38,13 @@ export default function useImageConverter() {
         return;
       }
       
+      console.log('File validation passed');
       setState(prev => ({ ...prev, progress: 25 }));
       
       // Convert with progress tracking
+      console.log('Starting conversion...');
       const result = await convertPngToSvg(file);
+      console.log('Conversion completed with result:', result);
       
       setState(prev => ({ 
         ...prev, 
@@ -48,6 +55,7 @@ export default function useImageConverter() {
       }));
       
     } catch (error) {
+      console.error('Conversion error in hook:', error);
       setState(prev => ({ 
         ...prev, 
         error: error.message, 

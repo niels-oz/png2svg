@@ -85,11 +85,11 @@ npm run build && npm run export  # Full build for Vercel
 
 ## MVP Constraints
 
-**Single File Only**: No batch processing (moved to future iterations)
-**PNG Input Only**: No other image formats
-**Basic Error Handling**: Simple validation and alerts
-**Desktop-Primary**: Responsive but desktop-focused
-**Minimal Dependencies**: Only essential packages (ImageTracerJS + Next.js)
+- **Single File Only**: No batch processing (moved to future iterations)
+- **PNG Input Only**: No other image formats
+- **Basic Error Handling**: Simple validation and alerts
+- **Desktop-Primary**: Responsive but desktop-focused
+- **Minimal Dependencies**: Only essential packages (ImageTracerJS + Next.js)
 
 ## Future Iterations
 

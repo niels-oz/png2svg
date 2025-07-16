@@ -137,7 +137,7 @@ npm run test:coverage
 
 ### Test Coverage
 
-- **205 total tests** with **170 passing** (83% pass rate)
+- **242 total tests** with **194 passing** (80% pass rate)
 - **Component tests**: All UI components with user interactions
 - **Utility tests**: File validation, conversion logic, optimization
 - **Integration tests**: End-to-end conversion flow

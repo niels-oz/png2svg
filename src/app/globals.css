@@ -82,15 +82,71 @@ body {
   background: #f8f9fa;
 }
 
+.code-viewer-controls {
+  display: flex;
+  gap: 10px;
+  padding: 10px 15px;
+  border-bottom: 1px solid #eee;
+  background: #f8f9fa;
+}
+
+.code-viewer-controls button {
+  padding: 6px 12px;
+  font-size: 14px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.code-viewer-controls button:hover {
+  background: #f8f9fa;
+  border-color: #007bff;
+}
+
+.code-viewer-controls button:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+.copy-button.success {
+  background: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+.copy-button.error {
+  background: #dc3545;
+  color: white;
+  border-color: #dc3545;
+}
+
 .code-block {
   padding: 15px;
   font-family: 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.4;
-  max-height: 200px;
-  overflow-y: auto;
   background: #f8f9fa;
   margin: 0;
+  border: none;
+  resize: vertical;
+  width: 100%;
+  min-height: 200px;
+  overflow-y: auto;
+}
+
+.code-block:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+.code-info {
+  padding: 10px 15px;
+  background: #f8f9fa;
+  border-top: 1px solid #eee;
+  font-size: 12px;
+  color: #666;
 }
 
 .download-button {
